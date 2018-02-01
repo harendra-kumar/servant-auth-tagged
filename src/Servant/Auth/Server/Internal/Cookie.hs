@@ -20,10 +20,16 @@ import Servant.Auth.Server.Internal.ConfigTypes
 import Servant.Auth.Server.Internal.JWT         (FromJWT (decodeJWT), ToJWT,
                                                  makeJWT)
 import Servant.Auth.Server.Internal.Types
+import Servant.Auth.Server.Internal.RoleTypes
 
-
-cookieAuthCheck :: FromJWT usr => CookieSettings -> JWTSettings -> AuthCheck usr
-cookieAuthCheck ccfg jwtCfg = do
+cookieAuthCheck
+    :: FromJWT usr
+    => [RoleAttribute]
+    -> [RolePriv]
+    -> CookieSettings
+    -> JWTSettings
+    -> AuthCheck usr
+cookieAuthCheck _ _ ccfg jwtCfg = do
   req <- ask
   jwtCookie <- maybe mempty return $ do
     cookies' <- lookup "Cookie" $ requestHeaders req

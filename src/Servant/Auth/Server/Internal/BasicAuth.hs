@@ -8,6 +8,7 @@ import           Servant.Server.Internal.BasicAuth (decodeBAHdr,
 
 
 import Servant.Auth.Server.Internal.Types
+import Servant.Auth.Server.Internal.RoleTypes
 
 -- | A 'ServantErr' that asks the client to authenticate via Basic
 -- Authentication, should be invoked by an application whenever
@@ -24,7 +25,9 @@ class FromBasicAuthData a where
   -- accidentally do something untoward with the password, like store it.
   fromBasicAuthData :: BasicAuthData -> BasicAuthCfg -> IO (AuthResult a)
 
-basicAuthCheck :: FromBasicAuthData usr => BasicAuthCfg -> AuthCheck usr
-basicAuthCheck cfg = AuthCheck $ \req -> case decodeBAHdr req of
+basicAuthCheck
+    :: FromBasicAuthData usr
+    => [RoleAttribute] -> [RolePriv] -> BasicAuthCfg -> AuthCheck usr
+basicAuthCheck _ _ cfg = AuthCheck $ \req -> case decodeBAHdr req of
   Nothing -> return Indefinite
   Just baData -> fromBasicAuthData baData cfg

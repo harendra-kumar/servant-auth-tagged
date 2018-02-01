@@ -7,65 +7,118 @@ import Servant hiding (BasicAuth)
 
 import Servant.Auth.Server.Internal.Types
 import Servant.Auth.Server.Internal.ConfigTypes
+import Servant.Auth.Server.Internal.RoleTypes
 import Servant.Auth.Server.Internal.BasicAuth
 import Servant.Auth.Server.Internal.Cookie
 import Servant.Auth.Server.Internal.JWT
 
--- | @IsAuth a ctx v@ indicates that @a@ is an auth type that expects all
--- elements of @ctx@ to be the in the Context and whose authentication check
--- returns an @AuthCheck v@.
-class IsAuth a v  where
-  type family AuthArgs a :: [*]
-  runAuth :: proxy a -> proxy v -> Unapp (AuthArgs a) (AuthCheck v)
+------------------------------------------------------------------------------
+-- Type families of functions
+------------------------------------------------------------------------------
 
-instance FromJWT usr => IsAuth Cookie usr where
-  type AuthArgs Cookie = '[CookieSettings, JWTSettings]
-  runAuth _ _ = cookieAuthCheck
+-- | This type family represents (or builds) the type of a function with
+-- argument types in the 'args' list in that order and returning a result of
+-- type 'res'.
+type family FnRep args res where
+    FnRep '[] res = res
+    FnRep (arg1 ': rest) res = arg1 -> FnRep rest res
 
-instance FromJWT usr => IsAuth JWT usr where
-  type AuthArgs JWT = '[JWTSettings]
-  runAuth _ _ = jwtAuthCheck
+-- | This type family proves that the function type 'fn' can be applied to the
+-- argument types in 'args' one at a time, and represents the final result of
+-- the application.
+type family FnApp fn args where
+    FnApp res '[] = res
+    FnApp (arg1 -> res) (arg1 ': rest) = FnApp res rest
 
-instance FromBasicAuthData usr => IsAuth BasicAuth usr where
-  type AuthArgs BasicAuth = '[BasicAuthCfg]
-  runAuth _ _ = basicAuthCheck
+------------------------------------------------------------------------------
+-- Implement a particular type of auth
+------------------------------------------------------------------------------
 
--- * Helper
+-- mkAuth does not do anything, it just wraps the auth function in a type
+-- family.
+class IsAuth auth (attrs :: [RoleAttribute]) (privs :: [RolePriv]) result where
+    type AuthCtxArgs auth :: [*]
+    mkAuth
+        :: proxy auth
+        -> proxy1 attrs
+        -> proxy2 privs
+        -> proxy result
+        -> FnRep (AuthCtxArgs auth) (AuthCheck result)
 
-class AreAuths (as :: [*]) (ctxs :: [*]) v where
-  runAuths :: proxy as -> Context ctxs -> AuthCheck v
+instance (DemoteAttrList attrs, DemotePrivList privs, FromJWT usr)
+    => IsAuth Cookie attrs privs usr where
+    type AuthCtxArgs Cookie = '[ CookieSettings, JWTSettings]
+    mkAuth _ _ _ _ =
+        cookieAuthCheck (demoteAttrList (Proxy :: Proxy attrs))
+                        (demotePrivList (Proxy :: Proxy privs))
 
-instance  AreAuths '[] ctxs v where
-  runAuths _ _ = mempty
+instance (DemoteAttrList attrs, DemotePrivList privs, FromJWT usr)
+    => IsAuth JWT attrs privs usr where
+    type AuthCtxArgs JWT = '[JWTSettings]
+    mkAuth _ _ _ _ =
+        jwtAuthCheck (demoteAttrList (Proxy :: Proxy attrs))
+                     (demotePrivList (Proxy :: Proxy privs))
 
-instance ( AuthCheck v ~ App (AuthArgs a) (Unapp (AuthArgs a) (AuthCheck v))
-         , IsAuth a v
-         , AreAuths as ctxs v
-         , AppCtx ctxs (AuthArgs a) (Unapp (AuthArgs a) (AuthCheck v))
-         ) => AreAuths (a ': as) ctxs v where
-  runAuths _ ctxs = go <> runAuths (Proxy :: Proxy as) ctxs
+instance (DemoteAttrList attrs, DemotePrivList privs, FromBasicAuthData usr)
+    => IsAuth BasicAuth attrs privs usr where
+    type AuthCtxArgs BasicAuth = '[BasicAuthCfg]
+    mkAuth _ _ _ _ =
+        basicAuthCheck (demoteAttrList (Proxy :: Proxy attrs))
+                       (demotePrivList (Proxy :: Proxy privs))
+
+------------------------------------------------------------------------------
+-- Apply a function from a list of functions with context and other attributes,
+-- privileges derived from the type.
+------------------------------------------------------------------------------
+
+-- | @appWithCtx@ picks an argument _type_ from @args@ and fetches the
+-- corresponding value from the conexts provided in the first argument and
+-- applies @fn@ to it, the result of the aplication is successively applied to
+-- other arguments until the arguments are exhausted.
+class AppWithCtx ts fn args where
+    appWithCtx :: Context ts -> fn -> proxy args -> FnApp fn args
+
+instance AppWithCtx ts fn '[] where
+  appWithCtx _ fn _ = fn
+
+instance (HasContextEntry ts ctx, AppWithCtx ts res args)
+    => AppWithCtx ts (ctx -> res) (ctx ': args) where
+    appWithCtx allCtxs fn _ =
+        appWithCtx allCtxs (fn $ getContextEntry allCtxs) (Proxy :: Proxy args)
+
+------------------------------------------------------------------------------
+-- Combine all auth types in a list of auths
+------------------------------------------------------------------------------
+
+class IsAuthList (auths :: [*])
+               (attrs :: [RoleAttribute])
+               (privs :: [RolePriv])
+               (ts :: [*]) -- contexts type level list
+               res
     where
-      go = appCtx (Proxy :: Proxy (AuthArgs a))
-                  ctxs
-                  (runAuth (Proxy :: Proxy a) (Proxy :: Proxy v))
+    runAuthList :: proxy auths -> proxy1 attrs -> proxy2 privs -> Context ts
+             -> AuthCheck res
 
-type family Unapp ls res where
-  Unapp '[] res = res
-  Unapp (arg1 ': rest) res = arg1 -> Unapp rest res
+instance  IsAuthList '[] attrs privs ts res where
+    runAuthList _ _ _ _ = mempty
 
-type family App ls res where
-  App '[] res = res
-  App (arg1 ': rest) (arg1 -> res) = App rest res
-
--- | @AppCtx@ applies the function @res@ to the arguments in @ls@ by taking the
--- values from the Context provided.
-class AppCtx ctx ls res where
-  appCtx :: proxy ls -> Context ctx -> res -> App ls res
-
-instance ( HasContextEntry ctxs ctx
-         , AppCtx ctxs rest res
-         ) => AppCtx ctxs (ctx ': rest) (ctx -> res) where
-  appCtx _ ctx fn = appCtx (Proxy :: Proxy rest) ctx $ fn $ getContextEntry ctx
-
-instance AppCtx ctx '[] res where
-  appCtx _ _ r = r
+instance ( IsAuth a attrs privs res
+         , IsAuthList as attrs privs ts res
+         , AuthCheck res ~
+           FnApp (FnRep (AuthCtxArgs a) (AuthCheck res)) (AuthCtxArgs a)
+         , AppWithCtx ts (FnRep (AuthCtxArgs a) (AuthCheck res)) (AuthCtxArgs a)
+         ) => IsAuthList (a ': as) attrs privs ts res
+    where
+    runAuthList _ _ _ allCtxs =
+        go <> runAuthList (Proxy :: Proxy as)
+                          (Proxy :: Proxy attrs)
+                          (Proxy :: Proxy privs)
+                          allCtxs
+        where
+        go = appWithCtx
+                allCtxs
+                (mkAuth (Proxy :: Proxy a)
+                         (Proxy :: Proxy attrs)
+                         (Proxy :: Proxy privs)
+                         (Proxy :: Proxy res))
+                (Proxy :: Proxy (AuthCtxArgs a))

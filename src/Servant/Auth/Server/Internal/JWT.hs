@@ -16,6 +16,7 @@ import           Data.Time            (UTCTime)
 import           Network.Wai          (requestHeaders)
 
 import Servant.Auth.Server.Internal.ConfigTypes
+import Servant.Auth.Server.Internal.RoleTypes
 import Servant.Auth.Server.Internal.Types
 
 -- This should probably also be from ClaimSet
@@ -44,8 +45,10 @@ class ToJWT a where
 
 -- | A JWT @AuthCheck@. You likely won't need to use this directly unless you
 -- are protecting a @Raw@ endpoint.
-jwtAuthCheck :: FromJWT usr => JWTSettings -> AuthCheck usr
-jwtAuthCheck config = do
+jwtAuthCheck
+    :: FromJWT usr
+    => [RoleAttribute] -> [RolePriv] -> JWTSettings -> AuthCheck usr
+jwtAuthCheck _ _ config = do
   req <- ask
   token <- maybe mempty return $ do
     authHdr <- lookup "Authorization" $ requestHeaders req

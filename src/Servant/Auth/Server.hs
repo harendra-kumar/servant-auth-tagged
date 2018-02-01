@@ -18,7 +18,8 @@ module Servant.Auth.Server
   ----------------------------------------------------------------------------
   -- * Auth
   -- | Basic types
-    Auth
+    RBACAuth
+  , Auth
   , AuthResult(..)
   , AuthCheck(..)
 
@@ -79,7 +80,7 @@ module Servant.Auth.Server
   -- ** Related types
   , IsSecure(..)
 
-  , AreAuths
+  , IsAuthList
 
   ----------------------------------------------------------------------------
   -- * BasicAuth
@@ -113,7 +114,7 @@ module Servant.Auth.Server
 
 import Data.Default.Class                       (Default (def))
 import Servant.Auth
-import Servant.Auth.Server.Internal             ()
+import Servant.Auth.Server.Internal             (RBACAuth)
 import Servant.Auth.Server.Internal.BasicAuth
 import Servant.Auth.Server.Internal.Class
 import Servant.Auth.Server.Internal.ConfigTypes
