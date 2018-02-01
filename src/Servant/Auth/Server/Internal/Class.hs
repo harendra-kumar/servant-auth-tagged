@@ -1,3 +1,4 @@
+{-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE UndecidableInstances #-}
 module Servant.Auth.Server.Internal.Class where
 
@@ -7,7 +8,6 @@ import Servant hiding (BasicAuth)
 
 import Servant.Auth.Server.Internal.Types
 import Servant.Auth.Server.Internal.ConfigTypes
-import Servant.Auth.Server.Internal.RoleTypes
 import Servant.Auth.Server.Internal.BasicAuth
 import Servant.Auth.Server.Internal.Cookie
 import Servant.Auth.Server.Internal.JWT
@@ -36,35 +36,37 @@ type family FnApp fn args where
 
 -- mkAuth does not do anything, it just wraps the auth function in a type
 -- family.
-class IsAuth auth (attrs :: [RoleAttribute]) (privs :: [RolePriv]) result where
+class IsAuth auth (tag :: k) result where
     type AuthCtxArgs auth :: [*]
     mkAuth
         :: proxy auth
-        -> proxy1 attrs
-        -> proxy2 privs
+        -> proxy1 tag
         -> proxy result
         -> FnRep (AuthCtxArgs auth) (AuthCheck result)
 
-instance (DemoteAttrList attrs, DemotePrivList privs, FromJWT usr)
-    => IsAuth Cookie attrs privs usr where
+class DemoteKind (a :: k) where
+    demoteKind :: proxy a -> k
+
+instance (DemoteKind tag, FromJWTTagged usr) => IsAuth Cookie tag usr where
     type AuthCtxArgs Cookie = '[ CookieSettings, JWTSettings]
-    mkAuth _ _ _ _ =
-        cookieAuthCheck (demoteAttrList (Proxy :: Proxy attrs))
-                        (demotePrivList (Proxy :: Proxy privs))
+    mkAuth _ _ _ = cookieAuthCheckTagged (demoteKind (Proxy :: Proxy tag))
 
-instance (DemoteAttrList attrs, DemotePrivList privs, FromJWT usr)
-    => IsAuth JWT attrs privs usr where
+instance (FromJWT usr) => IsAuth JWT () usr where
     type AuthCtxArgs JWT = '[JWTSettings]
-    mkAuth _ _ _ _ =
-        jwtAuthCheck (demoteAttrList (Proxy :: Proxy attrs))
-                     (demotePrivList (Proxy :: Proxy privs))
+    mkAuth _ _ _ = jwtAuthCheck
 
-instance (DemoteAttrList attrs, DemotePrivList privs, FromBasicAuthData usr)
-    => IsAuth BasicAuth attrs privs usr where
+instance (DemoteKind tag, FromJWTTagged usr) => IsAuth JWT tag usr where
+    type AuthCtxArgs JWT = '[JWTSettings]
+    mkAuth _ _ _ = jwtAuthCheckTagged (demoteKind (Proxy :: Proxy tag))
+
+instance (FromBasicAuthData usr) => IsAuth BasicAuth () usr where
     type AuthCtxArgs BasicAuth = '[BasicAuthCfg]
-    mkAuth _ _ _ _ =
-        basicAuthCheck (demoteAttrList (Proxy :: Proxy attrs))
-                       (demotePrivList (Proxy :: Proxy privs))
+    mkAuth _ _ _ = basicAuthCheck
+
+instance (DemoteKind tag, FromBasicAuthDataTagged usr)
+    => IsAuth BasicAuth tag usr where
+    type AuthCtxArgs BasicAuth = '[BasicAuthCfg]
+    mkAuth _ _ _ = basicAuthCheckTagged (demoteKind (Proxy :: Proxy tag))
 
 ------------------------------------------------------------------------------
 -- Apply a function from a list of functions with context and other attributes,
@@ -90,35 +92,25 @@ instance (HasContextEntry ts ctx, AppWithCtx ts res args)
 -- Combine all auth types in a list of auths
 ------------------------------------------------------------------------------
 
-class IsAuthList (auths :: [*])
-               (attrs :: [RoleAttribute])
-               (privs :: [RolePriv])
-               (ts :: [*]) -- contexts type level list
-               res
-    where
-    runAuthList :: proxy auths -> proxy1 attrs -> proxy2 privs -> Context ts
-             -> AuthCheck res
+class IsAuthList (auths :: [*]) (tag :: k) (ts :: [*]) res where
+    runAuthList :: proxy auths -> proxy1 tag -> Context ts -> AuthCheck res
 
-instance  IsAuthList '[] attrs privs ts res where
-    runAuthList _ _ _ _ = mempty
+instance IsAuthList '[] tag ts res where
+    runAuthList _ _ _ = mempty
 
-instance ( IsAuth a attrs privs res
-         , IsAuthList as attrs privs ts res
+instance ( IsAuth a tag res
+         , IsAuthList as tag ts res
          , AuthCheck res ~
            FnApp (FnRep (AuthCtxArgs a) (AuthCheck res)) (AuthCtxArgs a)
          , AppWithCtx ts (FnRep (AuthCtxArgs a) (AuthCheck res)) (AuthCtxArgs a)
-         ) => IsAuthList (a ': as) attrs privs ts res
+         ) => IsAuthList (a ': as) tag ts res
     where
-    runAuthList _ _ _ allCtxs =
-        go <> runAuthList (Proxy :: Proxy as)
-                          (Proxy :: Proxy attrs)
-                          (Proxy :: Proxy privs)
-                          allCtxs
+    runAuthList _ _ allCtxs =
+        go <> runAuthList (Proxy :: Proxy as) (Proxy :: Proxy tag) allCtxs
         where
         go = appWithCtx
                 allCtxs
                 (mkAuth (Proxy :: Proxy a)
-                         (Proxy :: Proxy attrs)
-                         (Proxy :: Proxy privs)
-                         (Proxy :: Proxy res))
+                        (Proxy :: Proxy tag)
+                        (Proxy :: Proxy res))
                 (Proxy :: Proxy (AuthCtxArgs a))

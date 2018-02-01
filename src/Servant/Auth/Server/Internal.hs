@@ -1,4 +1,5 @@
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
@@ -15,25 +16,21 @@ import Servant.Auth.Server.Internal.Cookie
 import Servant.Auth.Server.Internal.ConfigTypes
 import Servant.Auth.Server.Internal.JWT
 import Servant.Auth.Server.Internal.Types
-import Servant.Auth.Server.Internal.RoleTypes
 
 import Servant.Server.Internal.RoutingApplication
 
-type Auth (auths :: [*]) result = RBACAuth '[] '[]
-data RBACAuth (attrs :: [RoleAttribute])
-              (privs :: [RolePriv])
-              (auths :: [*])
-              result
+type Auth (auths :: [*]) result = TaggedAuth auths '() result
+data TaggedAuth (auths :: [*]) (tag :: k) result
 
 instance ( n ~ 'S ('S 'Z)
-         , HasServer (AddSetCookiesApi n api) ctxs, IsAuthList auths attrs privs ctxs v
+         , HasServer (AddSetCookiesApi n api) ctxs, IsAuthList auths tag ctxs v
          , HasServer api ctxs -- this constraint is needed to implement hoistServer
          , AddSetCookies n (ServerT api Handler) (ServerT (AddSetCookiesApi n api) Handler)
          , ToJWT v
          , HasContextEntry ctxs CookieSettings
          , HasContextEntry ctxs JWTSettings
-         ) => HasServer (RBACAuth attrs privs auths v :> api) ctxs where
-  type ServerT (RBACAuth attrs privs auths v :> api) m = AuthResult v -> ServerT api m
+         ) => HasServer (TaggedAuth auths tag v :> api) ctxs where
+  type ServerT (TaggedAuth auths tag v :> api) m = AuthResult v -> ServerT api m
 
 #if MIN_VERSION_servant_server(0,12,0)
   hoistServerWithContext _ pc nt s = hoistServerWithContext (Proxy :: Proxy api) pc nt . s
@@ -50,8 +47,7 @@ instance ( n ~ 'S ('S 'Z)
         authResult <- runAuthCheck
             (runAuthList
                 (Proxy :: Proxy auths)
-                (Proxy :: Proxy attrs)
-                (Proxy :: Proxy privs)
+                (Proxy :: Proxy tag)
                 context
             ) req
         cookies <- makeCookies authResult

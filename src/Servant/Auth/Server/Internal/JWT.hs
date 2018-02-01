@@ -16,7 +16,6 @@ import           Data.Time            (UTCTime)
 import           Network.Wai          (requestHeaders)
 
 import Servant.Auth.Server.Internal.ConfigTypes
-import Servant.Auth.Server.Internal.RoleTypes
 import Servant.Auth.Server.Internal.Types
 
 -- This should probably also be from ClaimSet
@@ -34,6 +33,9 @@ class FromJWT a where
       Error e -> Left $ T.pack e
       Success a -> Right a
 
+class FromJWTTagged a where
+  decodeJWTTagged :: tag -> Jose.ClaimsSet -> Either T.Text a
+
 -- | How to encode data from a JWT.
 --
 -- The default implementation stores data in the unregistered @dat@ claim, and
@@ -43,12 +45,11 @@ class ToJWT a where
   default encodeJWT :: ToJSON a => a -> Jose.ClaimsSet
   encodeJWT a = Jose.addClaim "dat" (toJSON a) Jose.emptyClaimsSet
 
--- | A JWT @AuthCheck@. You likely won't need to use this directly unless you
--- are protecting a @Raw@ endpoint.
-jwtAuthCheck
-    :: FromJWT usr
-    => [RoleAttribute] -> [RolePriv] -> JWTSettings -> AuthCheck usr
-jwtAuthCheck _ _ config = do
+doJWTAuthCheck
+    :: JWTSettings
+    -> (Jose.ClaimsSet -> Either a usr)
+    -> AuthCheck usr
+doJWTAuthCheck config decode = do
   req <- ask
   token <- maybe mempty return $ do
     authHdr <- lookup "Authorization" $ requestHeaders req
@@ -63,11 +64,17 @@ jwtAuthCheck _ _ config = do
                       unverifiedJWT
   case verifiedJWT of
     Left (_ :: Jose.JWTError) -> mzero
-    Right v -> case decodeJWT v of
+    Right v -> case decode v of
       Left _ -> mzero
       Right v' -> return v'
 
+-- | A JWT @AuthCheck@. You likely won't need to use this directly unless you
+-- are protecting a @Raw@ endpoint.
+jwtAuthCheck :: FromJWT usr => JWTSettings -> AuthCheck usr
+jwtAuthCheck config = doJWTAuthCheck config decodeJWT
 
+jwtAuthCheckTagged :: FromJWTTagged usr => t -> JWTSettings -> AuthCheck usr
+jwtAuthCheckTagged tag config = doJWTAuthCheck config (decodeJWTTagged tag)
 
 -- | Creates a JWT containing the specified data. The data is stored in the
 -- @dat@ claim. The 'Maybe UTCTime' argument indicates the time at which the

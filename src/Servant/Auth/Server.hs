@@ -18,8 +18,8 @@ module Servant.Auth.Server
   ----------------------------------------------------------------------------
   -- * Auth
   -- | Basic types
-    RBACAuth
-  , Auth
+    Auth
+  , TaggedAuth
   , AuthResult(..)
   , AuthCheck(..)
 
@@ -44,7 +44,9 @@ module Servant.Auth.Server
 
   -- ** Classes
   , FromJWT(..)
+  , FromJWTTagged(..)
   , ToJWT(..)
+  , DemoteKind (..)
 
   -- ** Related types
   , IsMatch(..)
@@ -55,6 +57,7 @@ module Servant.Auth.Server
 
   -- ** Create check
   , jwtAuthCheck
+  , jwtAuthCheckTagged
 
 
   ----------------------------------------------------------------------------
@@ -90,6 +93,7 @@ module Servant.Auth.Server
 
   -- ** Classes
   , FromBasicAuthData(..)
+  , FromBasicAuthDataTagged(..)
 
   -- ** Settings
   , BasicAuthCfg
@@ -114,7 +118,7 @@ module Servant.Auth.Server
 
 import Data.Default.Class                       (Default (def))
 import Servant.Auth
-import Servant.Auth.Server.Internal             (RBACAuth)
+import Servant.Auth.Server.Internal             (TaggedAuth)
 import Servant.Auth.Server.Internal.BasicAuth
 import Servant.Auth.Server.Internal.Class
 import Servant.Auth.Server.Internal.ConfigTypes

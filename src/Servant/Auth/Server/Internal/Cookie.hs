@@ -17,19 +17,16 @@ import           System.Entropy           (getEntropy)
 import           Web.Cookie
 
 import Servant.Auth.Server.Internal.ConfigTypes
-import Servant.Auth.Server.Internal.JWT         (FromJWT (decodeJWT), ToJWT,
-                                                 makeJWT)
+import Servant.Auth.Server.Internal.JWT
+    (FromJWT(..), FromJWTTagged (decodeJWTTagged), ToJWT, makeJWT)
 import Servant.Auth.Server.Internal.Types
-import Servant.Auth.Server.Internal.RoleTypes
 
-cookieAuthCheck
-    :: FromJWT usr
-    => [RoleAttribute]
-    -> [RolePriv]
-    -> CookieSettings
+cookieDoAuthCheck
+    :: CookieSettings
     -> JWTSettings
+    -> (Jose.ClaimsSet -> Either a usr)
     -> AuthCheck usr
-cookieAuthCheck _ _ ccfg jwtCfg = do
+cookieDoAuthCheck ccfg jwtCfg decode = do
   req <- ask
   jwtCookie <- maybe mempty return $ do
     cookies' <- lookup "Cookie" $ requestHeaders req
@@ -47,9 +44,25 @@ cookieAuthCheck _ _ ccfg jwtCfg = do
                       unverifiedJWT
   case verifiedJWT of
     Left (_ :: Jose.JWTError) -> mzero
-    Right v -> case decodeJWT v of
+    Right v -> case decode v of
       Left _ -> mzero
       Right v' -> return v'
+
+cookieAuthCheck
+    :: FromJWT usr
+    => CookieSettings
+    -> JWTSettings
+    -> AuthCheck usr
+cookieAuthCheck ccfg jwtCfg = cookieDoAuthCheck ccfg jwtCfg decodeJWT
+
+cookieAuthCheckTagged
+    :: FromJWTTagged usr
+    => tag
+    -> CookieSettings
+    -> JWTSettings
+    -> AuthCheck usr
+cookieAuthCheckTagged tag ccfg jwtCfg =
+    cookieDoAuthCheck ccfg jwtCfg (decodeJWTTagged tag)
 
 -- | Makes a cookie to be used for CSRF.
 makeCsrfCookie :: CookieSettings -> IO SetCookie
