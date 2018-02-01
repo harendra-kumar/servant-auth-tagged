@@ -1,13 +1,13 @@
-name:           servant-auth-rbac
+name:           servant-auth-tagged
 version:        0.3.1.0
-synopsis:       Authentication for servant-rbac
+synopsis:       Statci API specific Authentication for servant
 description:    This package provides the required instances for using the
-                @AuthRBAC@ combinator in your 'servant' server.
+                @TaggedAuth@ combinator in your 'servant' server.
                 .
                 Both cookie- and token- (REST API) based authentication is provided.
 category:       Web, Servant, Authentication
-homepage:       http://github.com/harendra-kumar/servant-auth-rbac
-bug-reports:    https://github.com/harendra-kumar/servant-auth-rbac/issues
+homepage:       http://github.com/harendra-kumar/servant-auth-tagged
+bug-reports:    https://github.com/harendra-kumar/servant-auth-tagged/issues
 author:         Julian K. Arni
 maintainer:     harendra.kumar@gmail.com
 copyright:      (c) Julian K. Arni
@@ -19,7 +19,7 @@ cabal-version:  >= 1.10
 
 source-repository head
   type: git
-  location: https://github.com/harendra-kumar/servant-auth-rbac
+  location: https://github.com/harendra-kumar/servant-auth-tagged
 
 library
   hs-source-dirs: src
@@ -127,7 +127,7 @@ test-suite spec
 
   -- test dependencies
   build-depends:
-      servant-auth-server
+      servant-auth-tagged
     , hspec > 2 && < 3
     , QuickCheck >= 2.8 && < 2.11
     , http-client >= 0.4 && < 0.6
