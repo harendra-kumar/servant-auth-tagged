@@ -83,6 +83,7 @@ module Servant.Auth.Server
   -- ** Related types
   , IsSecure(..)
 
+  , AreAuths
   , IsAuthList
 
   ----------------------------------------------------------------------------
@@ -117,8 +118,8 @@ module Servant.Auth.Server
   ) where
 
 import Data.Default.Class                       (Default (def))
-import Servant.Auth
-import Servant.Auth.Server.Internal             (TaggedAuth)
+import Servant.Auth hiding (Auth)
+import Servant.Auth.Server.Internal             (Auth, TaggedAuth)
 import Servant.Auth.Server.Internal.BasicAuth
 import Servant.Auth.Server.Internal.Class
 import Servant.Auth.Server.Internal.ConfigTypes

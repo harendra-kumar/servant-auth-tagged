@@ -47,21 +47,25 @@ class IsAuth auth (tag :: k) result where
 class DemoteKind (a :: k) where
     demoteKind :: proxy a -> k
 
+instance {-# OVERLAPPING  #-} (FromJWT usr) => IsAuth JWT '() usr where
+    type AuthCtxArgs JWT = '[JWTSettings]
+    mkAuth _ _ _ = jwtAuthCheck
+
+instance {-# OVERLAPPING  #-} (FromJWT usr) => IsAuth Cookie '() usr where
+    type AuthCtxArgs Cookie = '[ CookieSettings, JWTSettings]
+    mkAuth _ _ _ = cookieAuthCheck
+
+instance {-# OVERLAPPING  #-} (FromBasicAuthData usr) => IsAuth BasicAuth '() usr where
+    type AuthCtxArgs BasicAuth = '[BasicAuthCfg]
+    mkAuth _ _ _ = basicAuthCheck
+
 instance (DemoteKind tag, FromJWTTagged usr) => IsAuth Cookie tag usr where
     type AuthCtxArgs Cookie = '[ CookieSettings, JWTSettings]
     mkAuth _ _ _ = cookieAuthCheckTagged (demoteKind (Proxy :: Proxy tag))
 
-instance (FromJWT usr) => IsAuth JWT () usr where
-    type AuthCtxArgs JWT = '[JWTSettings]
-    mkAuth _ _ _ = jwtAuthCheck
-
 instance (DemoteKind tag, FromJWTTagged usr) => IsAuth JWT tag usr where
     type AuthCtxArgs JWT = '[JWTSettings]
     mkAuth _ _ _ = jwtAuthCheckTagged (demoteKind (Proxy :: Proxy tag))
-
-instance (FromBasicAuthData usr) => IsAuth BasicAuth () usr where
-    type AuthCtxArgs BasicAuth = '[BasicAuthCfg]
-    mkAuth _ _ _ = basicAuthCheck
 
 instance (DemoteKind tag, FromBasicAuthDataTagged usr)
     => IsAuth BasicAuth tag usr where
@@ -94,6 +98,9 @@ instance (HasContextEntry ts ctx, AppWithCtx ts res args)
 
 class IsAuthList (auths :: [*]) (tag :: k) (ts :: [*]) res where
     runAuthList :: proxy auths -> proxy1 tag -> Context ts -> AuthCheck res
+
+type AreAuths (auths :: [*]) (ts :: [*]) res
+    = (IsAuthList (auths :: [*]) '() (ts :: [*]) res)
 
 instance IsAuthList '[] tag ts res where
     runAuthList _ _ _ = mempty
