@@ -96,21 +96,21 @@ instance (HasContextEntry ts ctx, AppWithCtx ts res args)
 -- Combine all auth types in a list of auths
 ------------------------------------------------------------------------------
 
-class IsAuthList (auths :: [*]) (tag :: k) (ts :: [*]) res where
+class IsAuthList (auths :: [*]) (ts :: [*]) (tag :: k) res where
     runAuthList :: proxy auths -> proxy1 tag -> Context ts -> AuthCheck res
 
 type AreAuths (auths :: [*]) (ts :: [*]) res
-    = (IsAuthList (auths :: [*]) '() (ts :: [*]) res)
+    = (IsAuthList (auths :: [*]) (ts :: [*]) '() res)
 
-instance IsAuthList '[] tag ts res where
+instance IsAuthList '[] ts tag res where
     runAuthList _ _ _ = mempty
 
 instance ( IsAuth a tag res
-         , IsAuthList as tag ts res
+         , IsAuthList as ts tag res
          , AuthCheck res ~
            FnApp (FnRep (AuthCtxArgs a) (AuthCheck res)) (AuthCtxArgs a)
          , AppWithCtx ts (FnRep (AuthCtxArgs a) (AuthCheck res)) (AuthCtxArgs a)
-         ) => IsAuthList (a ': as) tag ts res
+         ) => IsAuthList (a ': as) ts tag res
     where
     runAuthList _ _ allCtxs =
         go <> runAuthList (Proxy :: Proxy as) (Proxy :: Proxy tag) allCtxs

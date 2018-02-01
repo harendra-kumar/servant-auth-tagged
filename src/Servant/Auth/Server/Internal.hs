@@ -23,7 +23,7 @@ type Auth (auths :: [*]) result = TaggedAuth auths '() result
 data TaggedAuth (auths :: [*]) (tag :: k) result
 
 instance ( n ~ 'S ('S 'Z)
-         , HasServer (AddSetCookiesApi n api) ctxs, IsAuthList auths tag ctxs v
+         , HasServer (AddSetCookiesApi n api) ctxs, IsAuthList auths ctxs tag v
          , HasServer api ctxs -- this constraint is needed to implement hoistServer
          , AddSetCookies n (ServerT api Handler) (ServerT (AddSetCookiesApi n api) Handler)
          , ToJWT v
