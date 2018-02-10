@@ -1,6 +1,6 @@
 name:           servant-auth-tagged
 version:        0.3.1.0
-synopsis:       Statci API specific Authentication for servant
+synopsis:       Static API specific Authentication for servant
 description:    This package provides the required instances for using the
                 @TaggedAuth@ combinator in your 'servant' server.
                 .
