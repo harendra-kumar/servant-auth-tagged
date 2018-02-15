@@ -47,6 +47,16 @@ class IsAuth auth (tag :: k) result where
 class DemoteKind (a :: k) where
     demoteKind :: proxy a -> k
 
+-- | Demote a type level (compile time) list of types to a term level (runtime)
+-- list of values
+
+instance DemoteKind '[] where
+    demoteKind _ = []
+
+instance (DemoteKind x, DemoteKind xs) => DemoteKind (x ': xs) where
+    demoteKind _ = demoteKind (Proxy :: Proxy x)
+        : demoteKind (Proxy :: Proxy xs)
+
 instance {-# OVERLAPPING  #-} (FromJWT usr) => IsAuth JWT '() usr where
     type AuthCtxArgs JWT = '[JWTSettings]
     mkAuth _ _ _ = jwtAuthCheck
