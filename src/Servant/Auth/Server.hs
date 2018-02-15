@@ -57,7 +57,6 @@ module Servant.Auth.Server
 
   -- ** Create check
   , jwtAuthCheck
-  , jwtAuthCheckTagged
 
 
   ----------------------------------------------------------------------------
@@ -78,6 +77,7 @@ module Servant.Auth.Server
   , makeCookie
   , makeCookieBS
   , acceptLogin
+  , cookieAuthCheck
 
 
   -- ** Related types
