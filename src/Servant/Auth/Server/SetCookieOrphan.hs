@@ -7,6 +7,7 @@ import Web.Cookie               (SetCookie, parseSetCookie, renderSetCookie)
 import Web.HttpApiData          (FromHttpApiData (..), ToHttpApiData (..))
 import Data.ByteString.Conversion (ToByteString(..))
 
+{-
 instance FromHttpApiData SetCookie where
     parseUrlPiece = parseHeader . encodeUtf8
     parseHeader = Right . parseSetCookie
@@ -14,6 +15,7 @@ instance FromHttpApiData SetCookie where
 instance ToHttpApiData SetCookie where
     toUrlPiece = decodeUtf8 . toHeader
     toHeader = toByteString . renderSetCookie
+-}
 
 instance ToByteString SetCookie where
     builder = renderSetCookie
